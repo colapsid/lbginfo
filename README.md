@@ -1,5 +1,5 @@
 
-##BGinfo for Linux
+## BGinfo for Linux
 
 ![lbginfo](lbginfo.jpg)
 
