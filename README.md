@@ -1,7 +1,7 @@
 
 ##BGinfo for Linux
 
-![lbginfo](lbginfo.jpg)
+![lbginfo](https://github.com/colapsid/lbginfo/blob/main/lbginfo.jpg)
 
 * This script require 'Image Magick'. Install it before start lbginfo.sh
 * Run lbginfo.sh from ordinary user, not root
