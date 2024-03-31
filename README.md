@@ -1,0 +1,2 @@
+# lbginfo
+BGinfo for Linux
