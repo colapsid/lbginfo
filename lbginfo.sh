@@ -244,7 +244,7 @@ function check_wallpaper () {
 #----------------------------------------------------------
 
 # MATE. Get User's wallpaper settings
-if [[ $XDG_SESSION_DESKTOP == "MATE" ]]; then
+if [[ $XDG_SESSION_DESKTOP == "mate" ]]; then
   ORIGWALL=$(gsettings get org.mate.background picture-filename | tr -d \')
   echo -e "Current MATE wallpaper:$C_PURPLE $ORIGWALL $C_RES"
   check_wallpaper
@@ -461,7 +461,7 @@ fi
 #----------------------------------------------------------
 
 # MATE setup wallpapers
-if [[ "$XDG_SESSION_DESKTOP" == "MATE" ]]; then
+if [[ "$XDG_SESSION_DESKTOP" == "mate" ]]; then
   update_wallpaper
   gsettings set org.mate.background picture-filename "$WALLPAPER"
 fi
