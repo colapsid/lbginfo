@@ -186,7 +186,7 @@ R_KERNEL=$(uname -rm)
 #----------------------------------------------------------
 
 # KDE. Get User's wallpaper settings
-if [[ $XDG_SESSION_DESKTOP == "KDE" ]]; then
+if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]; then
   DEFAULT_IMG_PATH="$HOME/$HOMEIMAGES/contents/images"
   #DEFAULT_IMG_PATH="/usr/share/wallpapers/Next/contents/images"
   KDE_IMG_INDEX=$(awk -F'\\]\\[' '/\[Wallpaper\]\[org\.kde\.image\]\[General\]/ {print $2}' $HOME/.config/plasma-org.kde.plasma.desktop-appletsrc)
@@ -200,6 +200,7 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]]; then
       echo -e "Image size            $ki:" $(identify -ping -format '%wx%h' $KDE_IMG_INDEX_FILE)
       KDE_CURR_WALLPAPERS+=("$KDE_IMG_INDEX_FILE")
     elif [[ -d "$KDE_IMG_INDEX_FILE" ]]; then
+      KDE_IMG_INDEX_DIR="${KDE_IMG_INDEX_FILE}contents/images/"
       KDE_IMG_INDEX_FILE="${KDE_IMG_INDEX_FILE}contents/images/$DISPSIZE.jpg"
       if [[ -f "$KDE_IMG_INDEX_FILE" ]]; then
         echo -e "Current KDE wallpaper $ki: $KDE_IMG_INDEX_FILE"
@@ -208,10 +209,32 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]]; then
       else
         echo -e "$C_RED
         Error: $KDE_IMG_INDEX_FILE File not found!$C_YELLOW
-        Set Default wallpaper:$DEFAULTWALLPAPER $C_RES"
+        Try to set and resize from dir:$KDE_IMG_INDEX_DIR $C_RES"
         #Set Default wallpaper:$DEFAULT_IMG_PATH/$DISPSIZE.jpg $C_RES"
-        KDE_CURR_WALLPAPERS+=("$DEFAULTWALLPAPER")
         #KDE_CURR_WALLPAPERS+=("$DEFAULT_IMG_PATH/$DISPSIZE.jpg")
+        
+        RESIZE="true"
+        WPLS=($(ls -1 $KDE_IMG_INDEX_DIR))
+        WPLS+=("$DISPSIZE.jpg")
+
+        IFS=$'\n' WPSorted=($(sort <<<"${WPLS[*]}"))
+        unset IFS
+
+        n=0
+        for img in ${WPSorted[@]}; do
+          if [[ $img == "$DISPSIZE.jpg" ]]; then
+          
+            if [[ -n ${WPSorted[$n+1]} ]]; then
+              echo "Current: $img" "Next: ${WPSorted[$n+1]}"
+              KDE_CURR_WALLPAPERS+=(${KDE_IMG_INDEX_DIR}${WPSorted[$n+1]})
+            else
+              echo "Current: $img" "Prev: ${WPSorted[$n-1]}"
+              KDE_CURR_WALLPAPERS+=(${KDE_IMG_INDEX_DIR}${WPSorted[$n-1]})
+            fi
+          
+          fi
+          n+=1
+        done
       fi
     fi
 
@@ -410,7 +433,7 @@ function update_wallpaper() {
 #----------------------------------------------------------
 
 # KDE setup wallpapers
-if [[ "$XDG_SESSION_DESKTOP" == "KDE" ]]; then
+if [[ "$XDG_SESSION_DESKTOP" == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]; then
 
   if [[ ! -z $KDE_CURR_WALLPAPERS ]]; then
     kdx=0
