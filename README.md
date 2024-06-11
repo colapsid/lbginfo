@@ -18,11 +18,13 @@ Comment this:
 
 ### Usage:
 ```
+Launch lbginfo.sh without the option, then it will just update the current wallpaper
+
 -r    Resize image to primary display resolution
 lbginfo.sh -r
 
 -f    Use custom file (Do not mix [-f] and [-d] options)
-lbginfo.sh /some/file.jpg
+lbginfo.sh -f /some/file.jpg
 
 -d    Use custom directory (Do not mix [-f] and [-d] options)
 lbginfo.sh -d /some/dir
