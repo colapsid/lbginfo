@@ -24,6 +24,10 @@ while [ -n "$1" ]; do
       DIR="$2"
       shift
     ;;
+    -p)
+      echo "Pango option: On"
+      PANGO="true"
+    ;;
     --)
       shift
       break
@@ -34,6 +38,7 @@ while [ -n "$1" ]; do
       echo "  -r,    Resize image to primary display resolution"
       echo "  -f,    Use custom file"
       echo "  -d,    Use custom directory"
+      echo "  -p,    Use pango extension"
       echo ""
       echo "Note:"
       echo "   Do not mix [-f] and [-d] options"
@@ -73,7 +78,7 @@ C_RES='\033[0m'
 
 # user UID check
 if [[ "$UID" == 0 ]]; then
-  echo -e "Error:$C_RED Run $0 from not root!$C_RES"
+  echo -e "$C_RED""Error: Run $0 from not root! $C_RES"
   exit
 fi
 
@@ -81,8 +86,19 @@ fi
 MAGICK="/usr/bin/convert"
 # Check if ImageMagick installed
 if [[ ! -f "$MAGICK" ]]; then
-  echo -e "Error:$C_RED ImageMagick not installed!$C_RES"
+  echo -e "$C_RED""Error: ImageMagick not installed! $C_RES"
   exit
+fi
+
+# If Pango support
+if [[ "$PANGO" == "true" ]]; then
+  IS_PANGO=$(convert -list format | grep -i Pango | awk '{print $3}')
+  if [[ $IS_PANGO == "---" ]] || [[ -z $IS_PANGO ]]; then
+    echo -e "$C_YELLOW""Warning: Pango may not supported $C_RES"
+  else
+    echo -e "$C_GREEN""Pango supported ! $C_RES"
+    PANGO_OK='true'
+  fi
 fi
 
 #----------------------------------------------------------
@@ -97,7 +113,6 @@ fi
 # Temp files
 BGFILE="$TEMPDIR/bg.txt"
 BG="$TEMPDIR/bg.png"
-NEWWALL="$TEMPDIR/new_tmp_image.png"
 TMP_IMAGE="$TEMPDIR/tmp_image.png"
 
 #----------------------------------------------------------
@@ -108,6 +123,7 @@ ORIGWALL="/usr/share/kf5/wallpapers/Next/contents/images_dark/$WALLFILE"
 HOMEIMAGES="WallPapers"
 DEFAULTWALLPAPER="$HOME/$HOMEIMAGES/default.jpg"
 WALLPAPER="$HOME/$HOMEIMAGES/Custom.png"
+NEWWALL="$HOME/$HOMEIMAGES/Custom_temp.png"
 
 if [[ ! -d "$HOME/$HOMEIMAGES" ]]; then
   echo "Create $HOME/$HOMEIMAGES"
@@ -117,13 +133,15 @@ fi
 #----------------------------------------------------------
 
 # Language: RU, EN
-BGLANG="RU"
+BGLANG="EN"
 # Position SystemInfo: Center, East, North, NorthEast, Northwest, South, SouthEast, SouthWest, West
 POSITION="SouthEast"
-# Some Monospace fonts: Courier-Bold, CourierNew, Ubuntu Mono Bold, DejaVu Sans Mono, FreeMono Bold
+# Some Monospace fonts: DejaVu-Sans-Mono-Bold, Courier-Bold, CourierNew, Ubuntu Mono Bold, DejaVu Sans Mono, FreeMono Bold
 FONT="DejaVu-Sans-Mono-Bold"
+FONT_P="DejaVu Sans Mono"  # For Pango
 # Text/font size
 FONTSIZE="16"
+FONTSIZE_P="14" # For Pango
 # Text color: White, Black, Red, Green, Blue, Yellow, Orange ...
 FILL="White"
 # Background color: none, White, Black, Red, Green, Blue, Yellow, Orange ...
@@ -136,15 +154,19 @@ STROKECOLOR="none"
 # System info
 R_HOSTNAME=$(hostname -f)
 R_USERNAME=$USER
-R_IPADRS=(`ip -o addr | grep -v "fe80" | awk '!/^[0-9]*: ?lo|link\/ether/ {print $2":"$4}'`)
+R_IPADRS=$(ip -o addr | grep -v "fe80" | awk '!/^[0-9]*: ?lo|link\/ether/ {print $2": "$4}')
 R_MACADRS=$(ip -o link show | grep -v "lo" | cut -d ' ' -f 2,20)
 R_DNSSERVER=$(grep ^nameserver /etc/resolv.conf | awk '{print $2}')
 if [[ "$R_DNSSERVER" == "127.0.0.53" ]]; then
   if [[ -f /usr/bin/nmcli ]]; then
     R_DNSSERVER=(`nmcli dev show | grep DNS | awk '{print $2}'`)
   fi
+elif [[ "$R_DNSSERVER" == "127.0.0.1" ]]; then
+  if [[ -f /etc/resolv.conf.dnsmasq ]]; then
+    R_DNSSERVER=$(grep ^nameserver /etc/resolv.conf.dnsmasq | awk '{print $2}')
+  fi
 fi
-R_GATEWAY=$(ip route | grep default | cut -d' ' -f 3)
+R_GATEWAY=$(ip route | grep default | cut -d' ' -f 3 | head -n1)
 R_CPUMODEL=$(cat /proc/cpuinfo | grep "model name" | awk -F":" '{print $2}' | head -1 | sed -e 's/^ *//' -e 's/Intel(R) Core(TM) //')
 R_NUMCPU=$(cat /proc/cpuinfo | grep processor | wc -l)
 MEMTOTAL=$(grep "MemTotal:" /proc/meminfo | tr -d [\ a-zA-Z:])
@@ -194,7 +216,7 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]
 
   for ki in ${KDE_IMG_INDEX[@]}; do
     KDE_IMG_INDEX_FILE=$(kreadconfig5 --file "$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc" --group 'Containments' --group $ki --group 'Wallpaper' --group 'org.kde.image' --group 'General' --key 'Image' | sed 's|file://||')
-    
+
     if [[ -f "$KDE_IMG_INDEX_FILE" ]]; then
       echo -e "Current KDE wallpaper $ki: $KDE_IMG_INDEX_FILE"
       echo -e "Image size            $ki:" $(identify -ping -format '%wx%h' $KDE_IMG_INDEX_FILE)
@@ -208,11 +230,11 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]
         KDE_CURR_WALLPAPERS+=("$KDE_IMG_INDEX_FILE")
       else
         echo -e "$C_RED
-        Error: $KDE_IMG_INDEX_FILE File not found!$C_YELLOW
-        Try to set and resize from dir:$KDE_IMG_INDEX_DIR $C_RES"
+Error: $KDE_IMG_INDEX_FILE File not found!$C_YELLOW
+Try to set and resize from dir:$KDE_IMG_INDEX_DIR $C_RES"
         #Set Default wallpaper:$DEFAULT_IMG_PATH/$DISPSIZE.jpg $C_RES"
         #KDE_CURR_WALLPAPERS+=("$DEFAULT_IMG_PATH/$DISPSIZE.jpg")
-        
+
         RESIZE="true"
         WPLS=($(ls -1 $KDE_IMG_INDEX_DIR))
         WPLS+=("$DISPSIZE.jpg")
@@ -223,7 +245,7 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]
         n=0
         for img in ${WPSorted[@]}; do
           if [[ $img == "$DISPSIZE.jpg" ]]; then
-          
+
             if [[ -n ${WPSorted[$n+1]} ]]; then
               echo "Current: $img" "Next: ${WPSorted[$n+1]}"
               KDE_CURR_WALLPAPERS+=(${KDE_IMG_INDEX_DIR}${WPSorted[$n+1]})
@@ -231,7 +253,7 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]
               echo "Current: $img" "Prev: ${WPSorted[$n-1]}"
               KDE_CURR_WALLPAPERS+=(${KDE_IMG_INDEX_DIR}${WPSorted[$n-1]})
             fi
-          
+
           fi
           n+=1
         done
@@ -246,6 +268,10 @@ if [[ $XDG_SESSION_DESKTOP == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" ]]
 
     if [[ -z "$ORIGWALL"  ]]; then
       ORIGWALL="$DEFAULT_IMG_PATH/$DISPSIZE.jpg"
+      if [[ ! -f "$ORIGWALL" ]]; then
+        echo -e "$C_RED""Error: File $ORIGWALL not found! $C_RES"
+        exit
+      fi
     fi
 
   fi
@@ -256,9 +282,16 @@ fi
 # Function check path $ORIGWALL
 function check_wallpaper () {
   if [[ ! -f "$ORIGWALL" ]]; then
-    echo -e "Error:$C_RED File $ORIGWALL not found!$C_RES"
-    echo -e "Set file:$C_YELLOW $DEFAULTWALLPAPER $C_RES"
-    ORIGWALL="$DEFAULTWALLPAPER"
+    echo -e "$C_RED""Error: File $ORIGWALL not found! $C_RES"
+
+    if [[ -f "$DEFAULTWALLPAPER" ]]; then
+      echo -e "Set file:$C_YELLOW $DEFAULTWALLPAPER $C_RES"
+      ORIGWALL="$DEFAULTWALLPAPER"
+    else
+      echo -e "$C_RED""Error: File $DEFAULTWALLPAPER not found! $C_RES"
+      exit
+    fi
+
     #echo -e "Set file:$C_YELLOW $DEFAULT_IMG_PATH/$DISPSIZE.jpg $C_RES"
     #ORIGWALL="$DEFAULT_IMG_PATH/$DISPSIZE.jpg"
   fi
@@ -288,11 +321,18 @@ fi
 
 # if -f and -d options
 if [[ ! -z "$FILE" && ! -z "$DIR" ]]; then
-  echo -e "$C_RED
-Error: Do not mix [-f] and [-d] options $C_RES"
+  echo -e "$C_RED""Error: Do not mix [-f] and [-d] options $C_RES"
   exit
 fi
 
+# Check if wallpaper already created
+if [[ -z "$FILE" && -z "$DIR" ]]; then
+  if [[ "$ORIGWALL" =~ "$HOME/$HOMEIMAGES/Custom" ]]; then
+    echo -e "$C_RED""Error: Wallpaper $ORIGWALL already created. Skipping. $C_RES"
+    echo "Exit"
+    exit
+  fi
+fi
 
 # Set custom wallpaper from file
 if [ ! -z "$FILE" ]; then
@@ -368,65 +408,107 @@ if [[ "$BGLANG" == "EN" ]]; then
     L_KERNEL="Kernel version :"
 fi
 
-# Export to BGFILE
-echo "$L_HOSTNAME" "$R_HOSTNAME"             >> "$BGFILE"
-echo "$L_USERNAME" "$R_USERNAME"             >> "$BGFILE"
-for i in ${R_IPADRS[@]}; do
-  echo "$L_IPADDRESS" "$i"                   >> "$BGFILE"
-done
-echo "$L_MACADRS" "$R_MACADRS"               >> "$BGFILE"
-echo "$L_GATEWAY" "$R_GATEWAY"               >> "$BGFILE"
-for d in ${R_DNSSERVER[@]}; do
-  echo "$L_DNSSERVER" "$d"                   >> "$BGFILE"
-done
-echo "$L_CPUMODEL" "$R_NUMCPU x $R_CPUMODEL" >> "$BGFILE"
-echo "$L_MEMTOTAL" "$R_MEMGB $R_SWAPGB"      >> "$BGFILE"
-echo "$L_OSVERSION" "$R_OS $R_VERSION"       >> "$BGFILE"
-echo "$L_KERNEL" "$R_KERNEL"                 >> "$BGFILE"
-echo "" >> "$BGFILE"
-echo "" >> "$BGFILE"
-echo "" >> "$BGFILE"
-echo "" >> "$BGFILE"
-
 # Generate System info image
-echo -e "$C_GREEN Generate System info image$C_RES"
-cat "$BGFILE" | convert \
-  -font "$FONT" -pointsize "$FONTSIZE" \
-  -strokewidth "$STROKEWIDTH" -stroke "$STROKECOLOR" \
-  -background "$BFILL" \
-  -fill "$FILL" \
-  label:@- "$BG" 
+if [[ "$PANGO" != "true" ]] && [[ "$PANGO_OK" != "true"  ]]; then
+  echo -e "$C_GREEN Generate System info image $C_RES"
+  # Export to BGFILE
+  echo "$L_HOSTNAME" "$R_HOSTNAME"             >> "$BGFILE"
+  echo "$L_USERNAME" "$R_USERNAME"             >> "$BGFILE"
+  IFS=$'\n'
+  for i in ${R_IPADRS[@]}; do
+    echo "$L_IPADDRESS" "$i"                   >> "$BGFILE"
+  done
+  for m in ${R_MACADRS[@]}; do
+    echo "$L_MACADRS" "$m"                     >> "$BGFILE"
+  done
+  unset IFS
+  echo "$L_GATEWAY" "$R_GATEWAY"               >> "$BGFILE"
+  for d in ${R_DNSSERVER[@]}; do
+    echo "$L_DNSSERVER" "$d"                   >> "$BGFILE"
+  done
+  echo "$L_CPUMODEL" "$R_NUMCPU x $R_CPUMODEL" >> "$BGFILE"
+  echo "$L_MEMTOTAL" "$R_MEMGB $R_SWAPGB"      >> "$BGFILE"
+  echo "$L_OSVERSION" "$R_OS $R_VERSION"       >> "$BGFILE"
+  echo "$L_KERNEL" "$R_KERNEL"                 >> "$BGFILE"
+  echo "" >> "$BGFILE"
+  echo "" >> "$BGFILE"
+  echo "" >> "$BGFILE"
+
+  cat "$BGFILE" | convert \
+    -font "$FONT" -pointsize "$FONTSIZE" \
+    -strokewidth "$STROKEWIDTH" -stroke "$STROKECOLOR" \
+    -background "$BFILL" \
+    -fill "$FILL" \
+    label:@- "$BG" 
+
+else
+  # Generate System info image (PANGO)
+  echo -e "$C_GREEN Generate System info image (PANGO) $C_RES"
+
+  echo "<span foreground='White'>$L_HOSTNAME </span><span foreground='Green' ><b>$R_HOSTNAME</b></span>"      >> "$BGFILE"
+  echo "<span foreground='White'>$L_USERNAME </span><span foreground='Red'   ><b>$R_USERNAME</b></span>"      >> "$BGFILE"
+
+  IFS=$'\n'
+  for i in ${R_IPADRS[@]}; do
+    echo "<span foreground='White'>$L_IPADDRESS </span><span foreground='Yellow'>$i</span>"                   >> "$BGFILE"
+  done
+
+  for m in ${R_MACADRS[@]}; do
+    echo "<span foreground='White'>$L_MACADRS </span><span foreground='Yellow'>$m</span>"                     >> "$BGFILE"
+  done
+  unset IFS
+
+  echo "<span foreground='White'>$L_GATEWAY </span><span foreground='Lime'>$R_GATEWAY</span>"                 >> "$BGFILE"
+
+  for d in ${R_DNSSERVER[@]}; do
+    echo "<span foreground='White'>$L_DNSSERVER </span><span foreground='Aqua'>$d</span>"                     >> "$BGFILE"
+  done
+
+  echo "<span foreground='White'>$L_CPUMODEL </span><span foreground='Orange'>$R_CPUMODEL x $R_NUMCPU</span>" >> "$BGFILE"
+  echo "<span foreground='White'>$L_MEMTOTAL </span><span foreground='Orange'>$R_MEMGB Gb $R_SWAPGB</span>"   >> "$BGFILE"
+  echo "<span foreground='White'>$L_OSVERSION </span><span foreground='Purple'>$R_OS $R_VERSION</span>"       >> "$BGFILE"
+  echo "<span foreground='White'>$L_KERNEL </span><span foreground='Purple'>$R_KERNEL</span>"                 >> "$BGFILE"
+  echo "" >> "$BGFILE"
+  echo "" >> "$BGFILE"
+  echo "" >> "$BGFILE"
+
+  cat "$BGFILE" | convert \
+    -font "$FONT_P" -pointsize "$FONTSIZE_P" \
+    -background "$BFILL" \
+    pango:@- "$BG"
+
+fi
 
 #----------------------------------------------------------
 
 # Function update_wallpaper
 function update_wallpaper() {
-  
+
   if [[ ! -z $1  ]]; then
     ORIGWALL=$1
   fi
-  
+
   if [[ ! -z $2  ]]; then
     WALLPAPER="$HOME/$HOMEIMAGES/Custom_$2.png"
   fi
-  
+
   # Resize original image to display resolution
   if [[ "$RESIZE" == "true" ]]; then
-    echo -e "$C_GREEN Resize original image to display resolution$C_RES"
+    echo -e "$C_GREEN Resize original image to display resolution $C_RES"
     convert -resize "$GEOMERTY" -quality 100 "$ORIGWALL" "$TMP_IMAGE"
   else
     TMP_IMAGE="$ORIGWALL"
   fi
 
   # Composite images
-  echo -e "$C_GREEN Composite images$C_RES"
+  echo -e "$C_GREEN Composite images $C_RES"
   composite -gravity "$POSITION" "$BG" "$TMP_IMAGE" "$NEWWALL"
 
   # Copy new image
-  echo -e "$C_GREEN Copy new image$C_RES"
+  echo -e "$C_GREEN Copy new image $C_RES"
   cp "$NEWWALL" "$WALLPAPER"
 
-  echo -e "$C_GREEN Update wallpaper$C_RES"
+  echo -e "$C_GREEN Update wallpaper $C_RES"
   # Update wallpaper
 }
 
@@ -438,9 +520,9 @@ if [[ "$XDG_SESSION_DESKTOP" == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" 
   if [[ ! -z $KDE_CURR_WALLPAPERS ]]; then
     kdx=0
     for kimg in ${KDE_CURR_WALLPAPERS[@]}; do
-        
+
       update_wallpaper $kimg $kdx
-      
+
       echo -e "$C_YELLOW Set #$kdx : $WALLPAPER $C_RES"
 
       # Double change. KDE feature or bug (When path not changed, wallpaper will not change)...
@@ -449,7 +531,7 @@ if [[ "$XDG_SESSION_DESKTOP" == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" 
           d = Desktops[$kdx];
           d.wallpaperPlugin = \"org.kde.image\";
           d.currentConfigGroup = Array(\"Wallpaper\", \"org.kde.image\", \"General\");
-          d.writeConfig(\"Image\", \"file://$TMP_IMAGE\");"
+          d.writeConfig(\"Image\", \"file://$NEWWALL\");"
 
       dbus-send --session --dest=org.kde.plasmashell --type=method_call /PlasmaShell org.kde.PlasmaShell.evaluateScript "string:
       var Desktops = desktops();
@@ -469,7 +551,7 @@ if [[ "$XDG_SESSION_DESKTOP" == "KDE" ]] || [[ $XDG_SESSION_DESKTOP == "plasma" 
           d = Desktops[i];
           d.wallpaperPlugin = \"org.kde.image\";
           d.currentConfigGroup = Array(\"Wallpaper\", \"org.kde.image\", \"General\");
-          d.writeConfig(\"Image\", \"file://$TMP_IMAGE\");}"
+          d.writeConfig(\"Image\", \"file://$NEWWALL\");}"
 
       dbus-send --session --dest=org.kde.plasmashell --type=method_call /PlasmaShell org.kde.PlasmaShell.evaluateScript "string:
       var Desktops = desktops();
@@ -502,7 +584,7 @@ fi
 #----------------------------------------------------------
 
 # Clear TEMPDIR
-echo -e "$C_YELLOW Clearing temprorary directory$C_RES"
+echo -e "$C_YELLOW Clearing temprorary directory $C_RES"
 if [[ ! -d "$TEMPDIR" ]]; then
   exit
 else
@@ -510,5 +592,4 @@ else
 fi
 
 # Finish
-echo -e "$C_CYAN Finish$C_RES"
-
+echo -e "$C_CYAN Finish $C_RES"

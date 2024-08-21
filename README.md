@@ -2,10 +2,11 @@
 ## BGinfo for Linux
 
 ![lbginfo](lbginfo.jpg)
+![lbginfo2](lbginfo2.jpg)
 
 * This script require 'Image Magick'. Install it before start lbginfo.sh
 * Run lbginfo.sh from ordinary user, not root
-* Tested on Kubuntu 22.04 (Dual display), Alt Linux 10 (KDE, MATE), Astra Linux 1.7 (FLY)
+* Tested on Kubuntu 22.04/24.04 (Dual display), Alt Linux 10 (KDE, MATE), Astra Linux 1.7 (FLY)
 * Recommended to set DEFAULTWALLPAPER=/usr/share/WallPapers/default.jpg. Where place default.jpg image.
 
 #### Fix Error: attempt to perform an operation not allowed by the security policy `@-'
@@ -39,6 +40,8 @@ etc...
 Script will use file which match primary display resolution
 Example folder: /usr/share/WallPapers/custom1
 Example folder: /usr/share/WallPapers/NewYear
+
+-p    Use pango extension
 ```
 
 ### Customization:
@@ -49,8 +52,10 @@ BGLANG="RU"
 POSITION="SouthEast"
 # Some monospace fonts: Courier-Bold, CourierNew, Ubuntu Mono Bold, DejaVu Sans Mono, FreeMono Bold
 FONT="DejaVu-Sans-Mono-Bold"
+FONT_P="DejaVu Sans Mono"  # For Pango
 # Text/font size
 FONTSIZE="16"
+FONTSIZE_P="14" # For Pango
 # Text color: White, Black, Red, Green, Blue, Yellow, Orange ...
 FILL="White"
 # Background color: none, White, Black, Red, Green, Blue, Yellow, Orange ...
